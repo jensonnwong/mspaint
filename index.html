@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Full Coverage</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Full Coverage">
+<meta name="theme-color" content="#16161a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+:root{--gut:26px;--ink:#16161a;--paper:#f6f3ec;--muted:#6f6a60;--line:#ddd6c8;--card:#fffdf8;--target:#ff4d2e}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:var(--paper);color:var(--ink);
+  font-family:ui-rounded,"SF Pro Rounded",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  overscroll-behavior:none;user-select:none;-webkit-user-select:none;
+  -webkit-touch-callout:none;-webkit-user-drag:none;touch-action:manipulation;-webkit-text-size-adjust:100%}
+*{-webkit-touch-callout:none;-webkit-user-drag:none}
+body.playing,body.playing *{touch-action:none;overscroll-behavior:none}
+html{overscroll-behavior:none;overscroll-behavior-x:none}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+#app{position:fixed;inset:0;display:flex;flex-direction:column}
+
+/* HUD */
+#hud{padding:calc(env(safe-area-inset-top) + 8px) 12px 8px;display:flex;align-items:center;gap:10px;
+  background:var(--ink);color:#fff;position:relative;z-index:2}
+#swatch{width:28px;height:28px;border-radius:8px;background:var(--target);box-shadow:inset 0 0 0 2px rgba(255,255,255,.25);flex:none}
+#hudLabel{font-size:12px;line-height:1.15;opacity:.75;min-width:0}
+#hudLabel b{display:block;font-size:14px;opacity:1;color:#fff;white-space:nowrap}
+#timer{margin-left:auto;font-variant-numeric:tabular-nums;font-size:26px;font-weight:800;letter-spacing:-.5px}
+#pct{font-variant-numeric:tabular-nums;font-size:14px;font-weight:700;width:58px;text-align:right;opacity:.9}
+#quit{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.12);font-size:16px;flex:none}
+#bar{height:5px;background:#2a2a30;position:relative;z-index:2}
+#barFill{height:100%;width:0;background:var(--target);transition:width .15s linear}
+
+/* Stage */
+#stage{flex:1;position:relative;touch-action:none;overflow:hidden;background:var(--ink)}
+#field{position:absolute;left:var(--gut);right:var(--gut);top:6px;bottom:calc(var(--gut) + env(safe-area-inset-bottom));
+  border-radius:10px;overflow:hidden;
+  background-color:var(--paper);
+  background-image:radial-gradient(circle,#d9d2c2 1px,transparent 1.4px);background-size:22px 22px}
+#field canvas{position:absolute;left:0;top:0}
+#hint{pointer-events:none;opacity:0;transition:opacity .3s}
+#hint.on{animation:pulse 1s ease-in-out infinite alternate}
+@keyframes pulse{from{opacity:.35}to{opacity:1}}
+#prompt{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  pointer-events:none;text-align:center;padding:24px;transition:opacity .25s}
+#prompt.gone{opacity:0}
+#promptSw{width:92px;height:92px;border-radius:26px;background:var(--target);box-shadow:0 10px 30px rgba(0,0,0,.15)}
+#promptTitle{font-size:30px;font-weight:900;letter-spacing:-.5px}
+#promptSub{font-size:15px;color:var(--muted)}
+#promptTip{font-size:13px;color:var(--muted);max-width:280px;background:var(--card);border:1px solid var(--line);padding:8px 12px;border-radius:12px}
+#toast{position:absolute;left:50%;top:14px;transform:translateX(-50%) translateY(-10px);background:var(--ink);color:#fff;
+  font-size:13px;font-weight:700;padding:7px 12px;border-radius:999px;opacity:0;transition:.25s;pointer-events:none;white-space:nowrap}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* Overlays */
+.overlay{position:fixed;inset:0;z-index:10;overflow-y:auto;-webkit-overflow-scrolling:touch;background:var(--paper)}
+.hidden{display:none!important}
+.wrap{max-width:520px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 26px) 18px calc(env(safe-area-inset-bottom) + 28px)}
+h1{font-size:40px;font-weight:900;letter-spacing:-1.5px;line-height:.95}
+h1 span{display:inline-block;background:var(--ink);color:var(--paper);padding:0 8px;border-radius:8px;transform:rotate(-2deg)}
+.sub{color:var(--muted);margin-top:10px;font-size:15px}
+.label{font-size:12px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin:24px 0 10px}
+#pens{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pen{background:var(--card);border:2px solid var(--line);border-radius:16px;padding:10px;text-align:left;transition:transform .1s,border-color .15s}
+.pen:active{transform:scale(.97)}
+.pen.sel{border-color:var(--ink);box-shadow:0 4px 0 var(--ink)}
+.pen canvas{width:100%;height:52px;display:block;border-radius:10px;background:#f1ece2}
+.pen b{display:block;margin-top:8px;font-size:15px}
+.pen small{display:block;color:var(--muted);font-size:12px;line-height:1.3;margin-top:2px}
+#diffs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;background:var(--card);border:2px solid var(--line);border-radius:16px;padding:5px}
+.diff{padding:10px 2px;border-radius:11px;font-weight:800;font-size:14px}
+.diff small{display:block;font-weight:600;font-size:11px;color:var(--muted);margin-top:2px}
+.diff.sel{background:var(--ink);color:#fff}
+.diff.sel small{color:#bbb}
+#best{margin-top:16px;font-size:14px;color:var(--muted);text-align:center}
+#best b{color:var(--ink)}
+.big{display:block;width:100%;margin-top:14px;padding:18px;border-radius:18px;background:var(--ink);color:#fff;font-size:20px;font-weight:900;letter-spacing:-.3px;box-shadow:0 5px 0 #000}
+.big:active{transform:translateY(3px);box-shadow:0 2px 0 #000}
+.ghost{display:block;width:100%;margin-top:10px;padding:14px;border-radius:16px;border:2px solid var(--ink);font-weight:800}
+.acct{display:flex;align-items:center;gap:10px;margin-top:16px;background:var(--card);border:2px solid var(--line);border-radius:14px;padding:10px 12px;font-size:14px}
+.acct .dot{width:10px;height:10px;border-radius:50%;background:#2fbf71;flex:none}
+.acct .dot.off{background:#c9c1b1}
+.acct b{font-weight:800}
+.acct button{margin-left:auto;font-weight:800;font-size:13px;padding:7px 11px;border-radius:999px;background:var(--ink);color:#fff;white-space:nowrap}
+.acct button.sub{background:none;color:var(--muted);text-decoration:underline;padding:7px 4px}
+.modal{background:rgba(22,22,26,.6);z-index:30}
+.modal .wrap{min-height:100%;display:flex;flex-direction:column;justify-content:center}
+h2{font-size:26px;font-weight:900;letter-spacing:-.5px;margin:4px 0 14px}
+input{display:block;width:100%;font:inherit;font-size:17px;padding:14px;border-radius:14px;border:2px solid var(--line);background:#fff;margin-top:10px;
+  user-select:text;-webkit-user-select:text;-webkit-touch-callout:default;color:var(--ink)}
+input:focus{outline:none;border-color:var(--ink)}
+#siErr{color:#d0342c;font-size:14px;font-weight:700;min-height:20px;margin-top:10px}
+.link{display:block;width:100%;margin-top:12px;font-size:14px;font-weight:700;color:var(--muted);text-decoration:underline}
+#rRank{margin-top:10px;font-size:15px;font-weight:800;min-height:20px}
+#rRank small{display:block;font-weight:600;color:var(--muted);font-size:13px;margin-top:2px}
+.lbhead{display:flex;align-items:center}
+.lbhead h2{margin:0}
+.x{margin-left:auto;width:38px;height:38px;border-radius:50%;background:var(--ink);color:#fff;font-size:17px}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:14px 0 4px;margin:0 -18px;padding-left:18px;padding-right:18px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;padding:9px 13px;border-radius:999px;border:2px solid var(--line);background:var(--card);font-weight:800;font-size:14px}
+.chip.sel{background:var(--ink);border-color:var(--ink);color:#fff}
+.seg{display:grid;gap:5px;background:var(--card);border:2px solid var(--line);border-radius:14px;padding:4px;margin-top:10px}
+.seg button{padding:9px 2px;border-radius:10px;font-weight:800;font-size:13px}
+.seg button.sel{background:var(--ink);color:#fff}
+#lbList{margin-top:14px;background:var(--card);border:2px solid var(--line);border-radius:16px;overflow:hidden}
+.row{display:grid;grid-template-columns:38px 1fr auto;align-items:center;gap:8px;padding:12px 14px;border-top:1px solid var(--line);font-size:15px}
+.row:first-child{border-top:0}
+.row .rk{font-weight:900;color:var(--muted);font-variant-numeric:tabular-nums}
+.row .nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .nm small{display:block;font-weight:600;color:var(--muted);font-size:12px}
+.row .tm{font-weight:900;font-variant-numeric:tabular-nums}
+.row.me{background:#fff3c4}
+.row.top .rk{color:var(--ink)}
+.empty{padding:28px 16px;text-align:center;color:var(--muted);font-size:14px;line-height:1.45}
+.how{margin-top:22px;font-size:13px;color:var(--muted);line-height:1.5}
+
+#results{background:var(--target)}
+#results .wrap{min-height:100%;display:flex;flex-direction:column;justify-content:center}
+.rcard{background:var(--card);border-radius:24px;padding:26px 20px;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.rcard .k{font-size:13px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted)}
+#rTime{font-size:64px;font-weight:900;letter-spacing:-2px;font-variant-numeric:tabular-nums;line-height:1.05;margin:6px 0}
+#rNew{display:inline-block;background:var(--ink);color:#fff;font-size:13px;font-weight:800;padding:5px 10px;border-radius:999px;margin-bottom:6px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}
+.stats div{background:#f1ece2;border-radius:12px;padding:10px 4px;font-size:15px;font-weight:800}
+.stats small{display:block;font-size:11px;color:var(--muted);font-weight:700;margin-bottom:2px}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hud">
+    <div id="swatch"></div>
+    <div id="hudLabel">Paint it<b id="hudColor">Tomato</b></div>
+    <div id="timer">0.00</div>
+    <div id="pct">0%</div>
+    <button id="quit" aria-label="Quit">✕</button>
+  </div>
+  <div id="bar"><div id="barFill"></div></div>
+  <div id="stage">
+   <div id="field">
+    <canvas id="paint"></canvas>
+    <canvas id="hint"></canvas>
+    <div id="prompt">
+      <div id="promptSw"></div>
+      <div id="promptTitle">Paint it Tomato</div>
+      <div id="promptSub">Touch anywhere to start the clock</div>
+      <div id="promptTip"></div>
+    </div>
+   </div>
+    <div id="toast">Missed spots are flashing</div>
+  </div>
+</div>
+
+<div id="menu" class="overlay">
+  <div class="wrap">
+    <h1>Full<br><span>Coverage</span></h1>
+    <p class="sub">Paint every pixel of the screen. The clock starts on your first touch and stops at 100%.</p>
+    <div class="acct" id="acct"></div>
+    <div class="label">Pick your pen</div>
+    <div id="pens"></div>
+    <div class="label">Difficulty (tip size)</div>
+    <div id="diffs"></div>
+    <div id="best"></div>
+    <button class="big" id="startBtn">Start painting</button>
+    <button class="ghost" id="lbBtn">Leaderboard</button>
+    <p class="how">The dark border is a safe zone: it doesn't need painting, and it keeps your finger away from the edges that swipe you out of the game. Coverage is measured pixel by pixel. Once you pass 97%, the spots you missed flash so you can hunt them down.</p>
+  </div>
+</div>
+
+<div id="results" class="overlay hidden">
+  <div class="wrap">
+    <div class="rcard">
+      <div class="k">Screen covered in</div>
+      <div id="rTime">0.00s</div>
+      <div id="rNew">New best</div>
+      <div id="rRank"></div>
+      <div class="stats">
+        <div><small>Strokes</small><span id="rStrokes">0</span></div>
+        <div><small>Pen</small><span id="rPen">Marker</span></div>
+        <div><small>Mode</small><span id="rDiff">Normal</span></div>
+      </div>
+      <div id="rBest" style="margin-top:14px;color:var(--muted);font-size:14px"></div>
+      <button class="ghost hidden" id="rSignIn">Sign in to post this time</button>
+      <button class="big" id="againBtn">Go again</button>
+      <button class="ghost" id="menuBtn">Change pen</button>
+    </div>
+  </div>
+</div>
+
+<div id="board" class="overlay hidden">
+  <div class="wrap">
+    <div class="lbhead"><h2>Leaderboard</h2><button class="x" id="lbClose" aria-label="Close">✕</button></div>
+    <div class="chips" id="lbPens"></div>
+    <div class="seg" id="lbDiffs" style="grid-template-columns:repeat(4,1fr)"></div>
+    <div class="seg" id="lbPeriod" style="grid-template-columns:1fr 1fr"></div>
+    <div id="lbList"></div>
+    <p class="how" id="lbNote">Fastest time per WW account. The weekly board resets Monday (Pacific time).</p>
+  </div>
+</div>
+
+<div id="signin" class="overlay modal hidden">
+  <div class="wrap">
+    <div class="rcard" style="text-align:left">
+      <div class="k">WW account</div>
+      <h2 id="siTitle">Sign in</h2>
+      <form id="siForm" autocomplete="on">
+        <input id="siName" placeholder="Account name" autocomplete="username" maxlength="16" autocapitalize="words" spellcheck="false">
+        <input id="siPin" placeholder="4-digit PIN" inputmode="numeric" pattern="[0-9]*" maxlength="4" type="password" autocomplete="current-password">
+        <div id="siErr"></div>
+        <button class="big" id="siGo" type="submit">Sign in</button>
+      </form>
+      <button class="link" id="siSwap">New here? Create a WW account</button>
+      <button class="ghost" id="siCancel">Not now</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const TAU = Math.PI * 2;
+const MS = 0.5; // coverage mask scale (mask px per CSS px)
+
+const PENS = {
+  marker:      {name:'Marker',      desc:'Round and solid. The honest choice.',           base:44,  tip:'Steady strokes. Overlap a little.'},
+  highlighter: {name:'Highlighter', desc:'Chisel tip: wide one way, thin the other.',     base:58,  tip:'Chisel is fixed at 45°. Stroke across it, not along it.'},
+  ballpoint:   {name:'Ballpoint',   desc:'Precise. Painfully thin.',                      base:12,  tip:'Tiny tip. Zig-zag fast and tight.'},
+  crayon:      {name:'Crayon',      desc:'Waxy and grainy. Leaves gaps.',                 base:46,  tip:'Grainy strokes leave gaps. Go over areas more than once.'},
+  spray:       {name:'Spray Can',   desc:'Soft mist that builds up while held.',          base:84,  tip:'Hold still to build up paint, or sweep for a light coat.'},
+  roller:      {name:'Paint Roller',desc:'Huge, but its angle locks on each stroke.',     base:120, tip:'The roller locks to your first direction. Change direction and it paints thin, so lift and restart.'},
+};
+const DIFFS = {
+  easy:   {name:'Easy',   m:1.6},
+  normal: {name:'Normal', m:1},
+  hard:   {name:'Hard',   m:0.6},
+  insane: {name:'Insane', m:0.35},
+};
+const COLORS = [['Tomato','#ff4d2e'],['Cobalt','#2f5bff'],['Lime','#6cc400'],['Grape','#8a3ffc'],
+  ['Sunflower','#ffbf0f'],['Teal','#00a99d'],['Hot Pink','#ff3d9a'],['Tangerine','#ff8a00']];
+
+const $ = id => document.getElementById(id);
+
+// ---------- WW account + leaderboard (Supabase "WW Database") ----------
+const SB_URL = 'https://bekcyzospcruszqtpcpe.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJla2N5em9zcGNydXN6cXRwY3BlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxNDk2NjUsImV4cCI6MjEwODcyNTY2NX0.-YerT8XJmGwzszIn1GnubzLhtcsW1LM9TIH0qSY8OAs';
+async function rpc(fn, args){
+  let r;
+  try {
+    r = await fetch(SB_URL + '/rest/v1/rpc/' + fn, {method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'}, body:JSON.stringify(args)});
+  } catch(e){ const err = new Error('Can\'t reach the WW server.'); err.offline = true; throw err; }
+  const j = await r.json().catch(() => null);
+  if (!r.ok) throw new Error((j && (j.message || j.hint)) || 'Server error.');
+  if (j && j.ok === false) throw new Error(j.error || 'Something went wrong.');
+  return j;
+}
+const store = {
+  get(k){ try{ return localStorage.getItem(k) }catch(e){ return null } },
+  set(k,v){ try{ localStorage.setItem(k,v) }catch(e){} }
+};
+
+let ww = null; try { ww = JSON.parse(store.get('ww:session') || 'null'); } catch(e){ ww = null; }
+let serverBests = {}, pendingRun = null, siMode = 'in', siAfter = null;
+const saveWW = () => store.set('ww:session', ww ? JSON.stringify(ww) : '');
+const isAuthErr = e => /sign in again|log in again/i.test(e && e.message || '');
+function signedOut(){ ww = null; serverBests = {}; saveWW(); }
+
+async function refreshMe(){
+  if (!ww) return;
+  try {
+    const m = await rpc('cover_me', {p_name: ww.name, p_token: ww.token});
+    ww.name = m.name || ww.name; serverBests = m.bests || {}; saveWW();
+  } catch(e){ if (isAuthErr(e)) signedOut(); }
+  if (state === 'menu') renderMenu();
+}
+
+let sel = { pen: store.get('fc:pen') || 'marker', diff: store.get('fc:diff') || 'normal' };
+if (!PENS[sel.pen]) sel.pen = 'marker';
+if (!DIFFS[sel.diff]) sel.diff = 'normal';
+
+// ---------- Brush engine: draws identical shapes onto every ctx given ----------
+function makePainter(ctxs, penKey, w, color){
+  const all = f => { for (const c of ctxs) f(c); };
+  all(c => { c.fillStyle = color; c.strokeStyle = color; c.lineCap = 'round'; c.lineJoin = 'round'; c.lineWidth = w; });
+  let last = null, start = null, axis = null;
+
+  const quad = (pts) => all(c => { c.beginPath(); c.moveTo(pts[0],pts[1]); c.lineTo(pts[2],pts[3]); c.lineTo(pts[4],pts[5]); c.lineTo(pts[6],pts[7]); c.closePath(); c.fill(); });
+  function rectAt(p, ang, L, T){
+    const ux=Math.cos(ang), uy=Math.sin(ang), dx=ux*L/2, dy=uy*L/2, nx=-uy*T/2, ny=ux*T/2;
+    quad([p.x+dx+nx,p.y+dy+ny, p.x-dx+nx,p.y-dy+ny, p.x-dx-nx,p.y-dy-ny, p.x+dx-nx,p.y+dy-ny]);
+  }
+  function sweepRect(a, b, ang, L, T){
+    // union of the swept long axis, swept short axis and the end rects ≈ swept rectangle
+    const ux=Math.cos(ang), uy=Math.sin(ang);
+    const dx=ux*L/2, dy=uy*L/2, nx=-uy*T/2, ny=ux*T/2;
+    quad([a.x+dx,a.y+dy, b.x+dx,b.y+dy, b.x-dx,b.y-dy, a.x-dx,a.y-dy]);
+    quad([a.x+nx,a.y+ny, b.x+nx,b.y+ny, b.x-nx,b.y-ny, a.x-nx,a.y-ny]);
+    rectAt(a, ang, L, T); rectAt(b, ang, L, T);
+  }
+  function grains(cx, cy, n, r, smin, smax, power){
+    const pts = new Float32Array(n*3);
+    for (let i=0;i<n;i++){
+      const ang = Math.random()*TAU, rr = r*Math.pow(Math.random(), power);
+      const s = smin + Math.random()*(smax-smin);
+      pts[i*3]=cx+Math.cos(ang)*rr-s/2; pts[i*3+1]=cy+Math.sin(ang)*rr-s/2; pts[i*3+2]=s;
+    }
+    all(c => { for (let i=0;i<pts.length;i+=3) c.fillRect(pts[i],pts[i+1],pts[i+2],pts[i+2]); });
+  }
+  const crayonStamp = p => grains(p.x, p.y, Math.max(6, Math.round(w*0.8)), w/2, 2, 4.5, 0.5);
+  const sprayStamp = (p, k=1) => grains(p.x, p.y, Math.max(4, Math.round(w*0.45*k)), w/2, 1.4, 3, 0.85);
+
+  function walk(a, b, step, fn){
+    const d = Math.hypot(b.x-a.x, b.y-a.y), n = Math.max(1, Math.ceil(d/step));
+    for (let i=1;i<=n;i++) fn({x:a.x+(b.x-a.x)*i/n, y:a.y+(b.y-a.y)*i/n});
+  }
+
+  return {
+    down(x, y){
+      const p = {x,y}; last = p; start = p; axis = null;
+      if (penKey==='marker' || penKey==='ballpoint') all(c => { c.beginPath(); c.arc(x,y,w/2,0,TAU); c.fill(); });
+      else if (penKey==='highlighter') rectAt(p, -Math.PI/4, w, Math.max(3, w*0.22));
+      else if (penKey==='crayon') crayonStamp(p);
+      else if (penKey==='spray') sprayStamp(p);
+    },
+    move(x, y){
+      if (!last) return;
+      const p = {x,y};
+      switch(penKey){
+        case 'marker': case 'ballpoint':
+          all(c => { c.beginPath(); c.moveTo(last.x,last.y); c.lineTo(x,y); c.stroke(); }); break;
+        case 'highlighter':
+          sweepRect(last, p, -Math.PI/4, w, Math.max(3, w*0.22)); break;
+        case 'crayon':
+          walk(last, p, Math.max(2, w*0.22), crayonStamp); break;
+        case 'spray':
+          walk(last, p, Math.max(3, w*0.3), q => sprayStamp(q, 0.35)); break;
+        case 'roller':
+          if (axis === null){
+            if (Math.hypot(x-start.x, y-start.y) < 6) return;
+            axis = Math.atan2(y-start.y, x-start.x) + Math.PI/2; // perpendicular to first push
+            sweepRect(start, p, axis, w, 8);
+          } else sweepRect(last, p, axis, w, 8);
+          break;
+      }
+      last = p;
+    },
+    tick(){ if (penKey==='spray' && last) sprayStamp(last); },
+    up(){ last = null; }
+  };
+}
+
+// ---------- Menu ----------
+function drawPreview(cv, key){
+  const dpr = Math.min(devicePixelRatio||1, 2);
+  const W = cv.clientWidth || 140, H = 52;
+  cv.width = W*dpr; cv.height = H*dpr;
+  const c = cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0); c.clearRect(0,0,W,H);
+  const w = Math.max(2.5, PENS[key].base * DIFFS[sel.diff].m * 0.3);
+  const p = makePainter([c], key, w, '#16161a');
+  const pt = t => ({x: 14 + t*(W-28), y: H/2 + Math.sin(t*TAU*1.15)*(H*0.22)});
+  let q = pt(0); p.down(q.x, q.y);
+  for (let i=1;i<=60;i++){ q = pt(i/60); p.move(q.x, q.y); if (key==='spray') p.tick(); }
+  p.up();
+}
+function tipSize(key, diff){ return Math.round(PENS[key].base * DIFFS[diff].m); }
+function bestKey(){ return 'fc:best:'+sel.pen+':'+sel.diff; }
+function bestTime(){
+  const a = +store.get(bestKey()) || 0, b = serverBests[sel.pen+':'+sel.diff] || 0;
+  return a && b ? Math.min(a,b) : (a || b);
+}
+function fmt(ms){
+  const s = ms/1000;
+  if (s < 60) return s.toFixed(2);
+  const m = Math.floor(s/60), r = s - m*60;
+  return m + ':' + (r<10?'0':'') + r.toFixed(2);
+}
+function renderMenu(){
+  const pens = $('pens'); pens.innerHTML = '';
+  for (const k in PENS){
+    const b = document.createElement('button');
+    b.className = 'pen' + (k===sel.pen ? ' sel' : '');
+    b.innerHTML = `<canvas></canvas><b>${PENS[k].name}</b><small>${PENS[k].desc}</small>`;
+    b.onclick = () => { sel.pen = k; store.set('fc:pen', k); renderMenu(); };
+    pens.appendChild(b);
+  }
+  const diffs = $('diffs'); diffs.innerHTML = '';
+  for (const k in DIFFS){
+    const b = document.createElement('button');
+    b.className = 'diff' + (k===sel.diff ? ' sel' : '');
+    b.innerHTML = `${DIFFS[k].name}<small>${tipSize(sel.pen,k)}px</small>`;
+    b.onclick = () => { sel.diff = k; store.set('fc:diff', k); renderMenu(); };
+    diffs.appendChild(b);
+  }
+  requestAnimationFrame(() => pens.querySelectorAll('.pen').forEach((b,i) => drawPreview(b.querySelector('canvas'), Object.keys(PENS)[i])));
+  const best = bestTime();
+  const acct = $('acct');
+  if (ww){
+    acct.innerHTML = `<span class="dot"></span><span>Signed in as <b></b></span><button class="sub" id="soBtn">Sign out</button>`;
+    acct.querySelector('b').textContent = ww.name;
+    $('soBtn').onclick = () => { const w = ww; signedOut(); renderMenu(); rpc('ww_logout', {p_name:w.name, p_token:w.token}).catch(()=>{}); };
+  } else {
+    acct.innerHTML = `<span class="dot off"></span><span>Playing as guest</span><button id="siBtn">Sign in</button>`;
+    $('siBtn').onclick = () => openSignIn(null);
+  }
+  $('best').innerHTML = best ? `Your best with ${PENS[sel.pen].name} on ${DIFFS[sel.diff].name}: <b>${fmt(+best)}s</b>` : `No time yet for ${PENS[sel.pen].name} on ${DIFFS[sel.diff].name}`;
+}
+
+// ---------- Game ----------
+const stage = $('stage'), paint = $('paint'), hint = $('hint');
+const pctx = paint.getContext('2d');
+const hctx = hint.getContext('2d');
+const mask = document.createElement('canvas');
+const mctx = mask.getContext('2d', {willReadFrequently:true});
+
+let state = 'menu', W=0, H=0, dpr=1, painter=null, color=null, colorIdx=-1;
+let startT=0, elapsed=0, strokes=0, isDown=false, activeId=null, dirty=false, lastMeasure=0, pct=0, hintShown=false;
+
+function setupCanvases(){
+  const r = $('field').getBoundingClientRect();
+  W = Math.round(r.width); H = Math.round(r.height);
+  dpr = Math.min(window.devicePixelRatio||1, 2.5);
+  paint.width = Math.round(W*dpr); paint.height = Math.round(H*dpr);
+  paint.style.width = W+'px'; paint.style.height = H+'px';
+  pctx.setTransform(dpr,0,0,dpr,0,0); pctx.clearRect(0,0,W,H);
+  mask.width = Math.ceil(W*MS); mask.height = Math.ceil(H*MS);
+  mctx.setTransform(MS,0,0,MS,0,0); mctx.clearRect(0,0,W,H);
+  hint.width = W; hint.height = H; hint.style.width = W+'px'; hint.style.height = H+'px';
+  hctx.clearRect(0,0,W,H);
+}
+
+function startRound(){
+  let i; do { i = Math.floor(Math.random()*COLORS.length); } while (i === colorIdx && COLORS.length > 1);
+  colorIdx = i; color = COLORS[i][1];
+  document.documentElement.style.setProperty('--target', color);
+  $('hudColor').textContent = COLORS[i][0];
+  $('promptTitle').textContent = 'Paint it ' + COLORS[i][0];
+  $('promptTip').textContent = PENS[sel.pen].tip;
+  $('prompt').classList.remove('gone');
+  $('menu').classList.add('hidden'); $('results').classList.add('hidden');
+  hint.classList.remove('on'); $('toast').classList.remove('on');
+  setupCanvases();
+  painter = makePainter([pctx, mctx], sel.pen, tipSize(sel.pen, sel.diff), color);
+  startT = 0; elapsed = 0; strokes = 0; pct = 0; hintShown = false; dirty = false; isDown = false; activeId = null;
+  $('timer').textContent = '0.00'; $('pct').textContent = '0%'; $('barFill').style.width = '0%';
+  state = 'playing'; document.body.classList.add('playing');
+}
+
+function toMenu(){
+  state = 'menu'; document.body.classList.remove('playing');
+  $('results').classList.add('hidden'); $('menu').classList.remove('hidden');
+  renderMenu();
+}
+
+function pos(e){ const r = paint.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+
+stage.addEventListener('pointerdown', e => {
+  if (state !== 'playing' || activeId !== null) return;
+  e.preventDefault();
+  activeId = e.pointerId; isDown = true;
+  try { stage.setPointerCapture(e.pointerId); } catch(_){}
+  if (!startT){ startT = performance.now(); $('prompt').classList.add('gone'); }
+  strokes++;
+  const [x,y] = pos(e); painter.down(x,y); dirty = true;
+});
+stage.addEventListener('pointermove', e => {
+  if (state !== 'playing' || e.pointerId !== activeId) return;
+  const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+  for (const ev of (evs.length ? evs : [e])){ const [x,y] = pos(ev); painter.move(x,y); }
+  dirty = true;
+});
+function endStroke(e){
+  if (e.pointerId !== activeId) return;
+  activeId = null; isDown = false;
+  if (painter) painter.up();
+  if (state === 'playing') measure();
+}
+stage.addEventListener('pointerup', endStroke);
+stage.addEventListener('pointercancel', endStroke);
+// ---- iOS: kill long-press callouts, magnifier, selection, double-tap zoom, pinch, rubber-band ----
+const block = e => { if (e.cancelable) e.preventDefault(); };
+const nonPassive = {passive:false};
+// On the paint area, swallow every raw touch (pointer events still fire, so painting is unaffected)
+['touchstart','touchmove','touchend','touchcancel'].forEach(t => stage.addEventListener(t, block, nonPassive));
+// Anywhere while playing: no scroll/bounce, no multi-finger zoom
+document.addEventListener('touchmove', e => { if (state === 'playing' || e.touches.length > 1) block(e); }, nonPassive);
+document.addEventListener('touchstart', e => {
+  // While playing, every touch outside a button is claimed by the game (incl. edge-swipe starts)
+  if (e.touches.length > 1 || (state === 'playing' && !e.target.closest('button'))) block(e);
+}, nonPassive);
+// Horizontal wheel/trackpad swipes (iPad with trackpad)
+document.addEventListener('wheel', e => { if (state === 'playing') block(e); }, nonPassive);
+// Double-tap zoom on the HUD (buttons keep working)
+let lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+  const now = Date.now();
+  if (now - lastTouchEnd < 350 && !e.target.closest('button, input')) block(e);
+  lastTouchEnd = now;
+}, nonPassive);
+['gesturestart','gesturechange','gestureend','contextmenu','selectstart','dragstart'].forEach(t =>
+  document.addEventListener(t, e => { if (!(e.target && e.target.closest && e.target.closest('input'))) block(e); }, nonPassive));
+
+function measure(){
+  dirty = false;
+  const mw = mask.width, mh = mask.height;
+  const d = mctx.getImageData(0,0,mw,mh).data;
+  const total = mw*mh; let covered = 0;
+  for (let i=3;i<d.length;i+=4) if (d[i] >= 110) covered++;
+  const missing = total - covered;
+  pct = covered / total;
+  const shown = missing === 0 ? 100 : Math.min(99.9, Math.floor(pct*1000)/10);
+  $('pct').textContent = (shown >= 99 && shown < 100 ? shown.toFixed(1) : Math.floor(shown)) + '%';
+  $('barFill').style.width = (pct*100) + '%';
+
+  if (missing === 0){ win(); return; }
+
+  if (pct >= 0.97){
+    hctx.clearRect(0,0,W,H);
+    hctx.fillStyle = 'rgba(22,22,26,.22)';
+    const stride = missing > 4000 ? Math.ceil(missing/4000) : 1;
+    let k = 0;
+    hctx.beginPath();
+    for (let i=3, p=0; i<d.length; i+=4, p++){
+      if (d[i] < 110 && (k++ % stride === 0)){
+        const x = (p % mw)/MS + 1, y = Math.floor(p / mw)/MS + 1;
+        hctx.moveTo(x+9, y); hctx.arc(x, y, 9, 0, TAU);
+      }
+    }
+    hctx.fill();
+    if (!hintShown){
+      hintShown = true; hint.classList.add('on');
+      const t = $('toast'); t.classList.add('on'); setTimeout(() => t.classList.remove('on'), 2200);
+    }
+  }
+}
+
+function win(){
+  state = 'done'; document.body.classList.remove('playing');
+  elapsed = performance.now() - startT;
+  $('timer').textContent = fmt(elapsed);
+  hint.classList.remove('on'); hctx.clearRect(0,0,W,H);
+  try { navigator.vibrate && navigator.vibrate([30,40,60]); } catch(_){}
+  const prev = bestTime();
+  const isBest = !prev || elapsed < prev;
+  if (!(+store.get(bestKey())) || elapsed < +store.get(bestKey())) store.set(bestKey(), String(Math.round(elapsed)));
+  pendingRun = {p_pen: sel.pen, p_diff: sel.diff, p_time_ms: Math.round(elapsed), p_strokes: strokes,
+    p_color: COLORS[colorIdx][0], p_area: Math.round(W*H)};
+  $('rRank').innerHTML = ''; $('rSignIn').classList.add('hidden');
+  if (ww) submitRun(); else $('rSignIn').classList.remove('hidden');
+  $('rTime').textContent = fmt(elapsed) + 's';
+  $('rNew').style.display = isBest ? 'inline-block' : 'none';
+  $('rStrokes').textContent = strokes;
+  $('rPen').textContent = PENS[sel.pen].name;
+  $('rDiff').textContent = DIFFS[sel.diff].name;
+  $('rBest').innerHTML = isBest ? (prev ? `Old best: ${fmt(prev)}s` : 'First time on the board') : `Best: <b style="color:var(--ink)">${fmt(prev)}s</b>`;
+  setTimeout(() => $('results').classList.remove('hidden'), 450);
+}
+
+async function submitRun(){
+  if (!pendingRun || !ww) return;
+  const run = pendingRun;
+  $('rSignIn').classList.add('hidden');
+  $('rRank').textContent = 'Posting to the leaderboard…';
+  try {
+    const r = await rpc('cover_submit', Object.assign({p_name: ww.name, p_token: ww.token}, run));
+    pendingRun = null;
+    serverBests[run.p_pen+':'+run.p_diff] = r.best;
+    const wk = r.rank_week ? `#${r.rank_week} of ${r.of_week} this week` : '';
+    $('rRank').innerHTML = `${wk}<small>#${r.rank_all} of ${r.of_all} all-time · best ${fmt(r.best)}s</small>`;
+  } catch(e){
+    if (isAuthErr(e)){ signedOut(); $('rRank').textContent = 'Your sign-in expired.'; $('rSignIn').classList.remove('hidden'); }
+    else { $('rRank').innerHTML = `Couldn't post this time.<small>${e.offline ? 'No connection to the WW server.' : esc(e.message)}</small>`; }
+  }
+}
+const esc = t => String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// ---- Sign-in sheet ----
+function setSiMode(m){
+  siMode = m;
+  $('siTitle').textContent = m === 'in' ? 'Sign in' : 'Create a WW account';
+  $('siGo').textContent = m === 'in' ? 'Sign in' : 'Create account';
+  $('siSwap').textContent = m === 'in' ? 'New here? Create a WW account' : 'Already have one? Sign in';
+  $('siPin').autocomplete = m === 'in' ? 'current-password' : 'new-password';
+  $('siErr').textContent = '';
+}
+function openSignIn(after){
+  siAfter = after; setSiMode('in');
+  $('signin').classList.remove('hidden');
+  setTimeout(() => $('siName').focus(), 50);
+}
+function closeSignIn(){ $('signin').classList.add('hidden'); $('siPin').value = ''; siAfter = null; }
+$('siSwap').onclick = () => setSiMode(siMode === 'in' ? 'create' : 'in');
+$('siCancel').onclick = closeSignIn;
+$('siPin').addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0,4); });
+$('siForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = $('siName').value.trim().replace(/\s+/g, ' '), pin = $('siPin').value;
+  if (!/^[A-Za-z0-9][A-Za-z0-9 .'-]{1,15}$/.test(name)) { $('siErr').textContent = "Account names are 2–16 characters: letters, numbers, spaces, . ' or -"; return; }
+  if (!/^\d{4}$/.test(pin)) { $('siErr').textContent = 'Your PIN is 4 digits.'; return; }
+  $('siGo').disabled = true; $('siErr').textContent = '';
+  try {
+    const r = await rpc(siMode === 'in' ? 'ww_login' : 'ww_create_account', {p_name: name, p_pin: pin});
+    ww = {name: r.name || name, token: r.token}; saveWW();
+    const after = siAfter; closeSignIn();
+    await refreshMe();
+    if (after) after();
+  } catch(err){
+    $('siErr').textContent = err.offline ? "Can't reach the WW server. Open the game from its own page (not inside the Claude app) and check your connection." : err.message;
+  } finally { $('siGo').disabled = false; }
+});
+$('rSignIn').onclick = () => openSignIn(submitRun);
+
+// ---- Leaderboard ----
+let lb = {pen: 'marker', diff: 'normal', period: 'week'}, lbReq = 0;
+function openBoard(){ lb.pen = sel.pen; lb.diff = sel.diff; $('board').classList.remove('hidden'); renderBoard(); }
+function renderBoard(){
+  const mk = (box, items, key) => {
+    box.innerHTML = '';
+    for (const [k, label] of items){
+      const b = document.createElement('button');
+      b.className = (box.id === 'lbPens' ? 'chip' : '') + (lb[key] === k ? ' sel' : '');
+      b.textContent = label;
+      b.onclick = () => { lb[key] = k; renderBoard(); };
+      box.appendChild(b);
+    }
+  };
+  mk($('lbPens'), Object.keys(PENS).map(k => [k, PENS[k].name]), 'pen');
+  mk($('lbDiffs'), Object.keys(DIFFS).map(k => [k, DIFFS[k].name]), 'diff');
+  mk($('lbPeriod'), [['week','This week'],['all','All time']], 'period');
+  loadBoard();
+}
+async function loadBoard(){
+  const id = ++lbReq, list = $('lbList');
+  list.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const rows = await rpc('cover_board', {p_pen: lb.pen, p_diff: lb.diff, p_period: lb.period, p_limit: 50});
+    if (id !== lbReq) return;
+    if (!rows || !rows.length){
+      list.innerHTML = `<div class="empty">No times yet for ${PENS[lb.pen].name} on ${DIFFS[lb.diff].name}${lb.period==='week'?' this week':''}.<br>Be the first.</div>`;
+      return;
+    }
+    const me = ww ? ww.name.toLowerCase() : '';
+    list.innerHTML = rows.map(r => `<div class="row${r.name.toLowerCase()===me?' me':''}${r.rank<=3?' top':''}">
+      <span class="rk">${r.rank<=3 ? ['🥇','🥈','🥉'][r.rank-1] : r.rank}</span>
+      <span class="nm">${esc(r.name)}<small>${r.strokes} stroke${r.strokes===1?'':'s'}</small></span>
+      <span class="tm">${fmt(r.time_ms)}s</span></div>`).join('');
+  } catch(e){
+    if (id !== lbReq) return;
+    list.innerHTML = `<div class="empty">${e.offline ? "Couldn't reach the leaderboard.<br>It works when the game is opened from its own page, not inside the Claude app." : esc(e.message)}</div>`;
+  }
+}
+$('lbBtn').onclick = openBoard;
+$('lbClose').onclick = () => $('board').classList.add('hidden');
+
+function loop(t){
+  if (state === 'playing'){
+    if (isDown && painter){ painter.tick(); if (sel.pen === 'spray') dirty = true; }
+    if (startT){ elapsed = performance.now() - startT; $('timer').textContent = fmt(elapsed); }
+    if (dirty && t - lastMeasure > 140){ lastMeasure = t; measure(); }
+  }
+  requestAnimationFrame(loop);
+}
+
+$('startBtn').onclick = startRound;
+$('againBtn').onclick = startRound;
+$('menuBtn').onclick = toMenu;
+$('quit').onclick = toMenu;
+window.addEventListener('resize', () => { if (state === 'menu') renderMenu(); });
+
+renderMenu();
+refreshMe();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
